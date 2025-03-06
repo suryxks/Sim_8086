@@ -61,6 +61,7 @@ pub fn decode(bytes: Vec<u8>) {
                     let reg = ((bytes[idx + 1] & 0b00111000) >> 3) as u8;
                     let rm = (bytes[idx + 1] << 5) >> 5;
                     let d = dw >> 1;
+                    let w = (dw << 7) >> 7;
                     let [source, destination] = get_source_destination(dw, reg, rm);
                     match _mod {
                         0b11 => {
@@ -71,7 +72,7 @@ pub fn decode(bytes: Vec<u8>) {
                             match rm {
                                 0b110 => {
                                     let effective_address =
-                                        (bytes[idx + 2] as u16) << (8 + (bytes[idx + 3] as u16));
+                                        ((bytes[idx + 3] as u16) << 8) + (bytes[idx + 2] as u16);
                                     if d == 1 {
                                         println!(
                                             "{operation} {destination} ,[{effective_address}]"
@@ -102,12 +103,19 @@ pub fn decode(bytes: Vec<u8>) {
                                 .find(|element| { element.0 == rm })
                                 .unwrap()
                                 .to_owned().1[_mod as usize];
-                            let dlow = bytes[idx + 2];
+                            let mut dlow = bytes[idx + 2];
+                            let mut sign = "+";
+                            if w == 1 {
+                                dlow = dlow.wrapping_neg();
+                                sign = "-";
+                            }
                             if d == 1 {
-                                println!("{operation} {destination} ,[{effective_address}+{dlow}]");
+                                println!(
+                                    "{operation} {destination} ,[{effective_address}{sign}{dlow}]"
+                                );
                             } else {
                                 println!(
-                                    "{operation} [{effective_address}+{dlow}] ,{effective_address}"
+                                    "{operation} [{effective_address}{sign}{dlow}] ,{effective_address}"
                                 );
                             }
                             idx += 3;
@@ -119,14 +127,19 @@ pub fn decode(bytes: Vec<u8>) {
                                 .to_owned().1[_mod as usize];
                             let dlow = bytes[idx + 2] as u16;
                             let dhigh = (bytes[idx + 3] as u16) << 8;
-                            let displacement = dhigh + dlow;
+                            let mut displacement = dhigh + dlow;
+                            let mut sign = "+";
+                            if w == 1 {
+                                displacement = displacement.wrapping_neg();
+                                sign = "-";
+                            }
                             if d == 1 {
                                 println!(
-                                    "{operation} {destination} ,[{effective_address}+{displacement}]"
+                                    "{operation} {destination} ,[{effective_address}{sign}{displacement}]"
                                 );
                             } else {
                                 println!(
-                                    "{operation} [{effective_address}+{displacement}] ,{source}"
+                                    "{operation} [{effective_address}{sign}{displacement}] ,{source}"
                                 );
                             }
                             idx += 4;
@@ -161,6 +174,111 @@ pub fn decode(bytes: Vec<u8>) {
                         println!("{operation} {destination}, {data}");
                         idx += 2;
                     }
+                }
+                v if (v >> 1) == 0b1100011 => {
+                    let w = (bytes[idx] << 7) >> 7;
+                    let _mod = (bytes[idx + 1] >> 6) as u8;
+                    let rm = (bytes[idx + 1] << 5) >> 5;
+
+                    let effective_address = EFFECTIVE_ADDRESS_CALCULATION.iter()
+                        .find(|element| { element.0 == rm })
+                        .unwrap()
+                        .to_owned().1[_mod as usize];
+
+                    let instruction = OPCODEMAP.iter()
+                        .find(|element| {
+                            return element.0 == (v >> 1);
+                        })
+                        .unwrap()
+                        .to_owned().1;
+                    match _mod {
+                        0b01 => {
+                            let dlow = bytes[idx + 2];
+                            if w == 1 {
+                                let data = ((bytes[idx + 4] as u16) << 8) + (bytes[idx + 3] as u16);
+                                println!("{instruction} [{effective_address}+{dlow}], word {data}");
+                                idx += 5;
+                            } else {
+                                let data = bytes[idx + 3];
+                                println!(
+                                    "{instruction} {instruction} [{effective_address}+{dlow}], byte {data}"
+                                );
+                                idx += 4;
+                            }
+                        }
+                        0b10 => {
+                            let dlow = bytes[idx + 2] as u16;
+                            let dhigh = (bytes[idx + 3] as u16) << 8;
+                            let displacement = dhigh + dlow;
+                            if w == 1 {
+                                let data = ((bytes[idx + 5] as u16) << 8) + (bytes[idx + 4] as u16);
+                                println!(
+                                    "{instruction} [{effective_address}+{displacement}], word {data}"
+                                );
+                                idx += 6;
+                            } else {
+                                let data = bytes[idx + 3];
+                                println!(
+                                    "{instruction} [{effective_address}+{displacement}], byte {data}"
+                                );
+
+                                idx += 5;
+                            }
+                        }
+                        0b00 => {
+                            if w == 1 {
+                                let data = ((bytes[idx + 3] as u16) << 8) + (bytes[idx + 2] as u16);
+                                println!("{instruction} [{effective_address}], word {data}");
+                                idx += 4;
+                            } else {
+                                let data = bytes[idx + 2];
+                                println!("{instruction} [{effective_address}], byte {data}");
+
+                                idx += 3;
+                            }
+                        }
+                        _ => {
+                            println!("invalid");
+                            break;
+                        }
+                    }
+                }
+
+                v if (v >> 1) == 0b1010000 => {
+                    let w = (bytes[idx] << 7) >> 7;
+                    let addr: u16;
+                    if w == 1 {
+                        addr = ((bytes[idx + 2] as u16) << 8) + (bytes[idx + 1] as u16);
+                        idx += 3;
+                    } else {
+                        addr = bytes[idx + 1] as u16;
+                        idx += 2;
+                    }
+                    let instruction = OPCODEMAP.iter()
+                        .find(|element| {
+                            return element.0 == (v >> 1);
+                        })
+                        .unwrap()
+                        .to_owned().1;
+                    println!("{instruction} ax, [{addr}]");
+                }
+                v if (v >> 1) == 0b1010001 => {
+                    let w = (bytes[idx] << 7) >> 7;
+                    let addr: u16;
+                    if w == 1 {
+                        addr = ((bytes[idx + 2] as u16) << 8) + (bytes[idx + 1] as u16);
+                        idx += 3;
+                    } else {
+                        addr = bytes[idx + 1] as u16;
+                        idx += 2;
+                    }
+                    let instruction = OPCODEMAP.iter()
+                        .find(|element| {
+                            return element.0 == (v >> 1);
+                        })
+                        .unwrap()
+                        .to_owned().1;
+                    println!("{instruction} [{addr}], ax");
                 }
                 _ => {
                     println!("not supproted now");

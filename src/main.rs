@@ -11,6 +11,8 @@ fn main() {
     decode(my_buf);
     let mov = read_binary_file(String::from("./assets/listing_0039_more_movs"));
     decode(mov);
+    let challenge_movs = read_binary_file(String::from("./assets/listing_0040_challenge_movs"));
+    decode(challenge_movs);
 }
 fn read_binary_file(filepath: String) -> Vec<u8> {
     let my_buf = BufReader::new(File::open(filepath).unwrap());
