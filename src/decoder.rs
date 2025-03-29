@@ -1,4 +1,4 @@
-use crate::instruction::{ self, AddressingMode, Instruction, Operand, Operation, Register };
+use crate::instruction::{ AddressingMode, Instruction, Operand, Operation, Register };
 
 // Original tables for reference
 const REGISTER_TABLE: [(u8, [&str; 2]); 8] = [
