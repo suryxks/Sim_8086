@@ -1,8 +1,7 @@
-use core::net;
-
 use crate::instruction::{ Instruction, Operand, Operation, Register };
 #[derive(Debug, Clone, Copy)]
 pub struct Cpu {
+    pub memory: [u8; 1024 * 1024], // 1MB memory
     pub registers: CPURegisters,
     pub flags: Flags,
 }
@@ -17,6 +16,7 @@ pub struct CPURegisters {
     pub bp: u16,
     pub si: u16,
     pub di: u16,
+    pub ip: u16,
 }
 pub enum Flag {
     CF,
@@ -111,6 +111,7 @@ impl CPURegisters {
             bp: 0,
             si: 0,
             di: 0,
+            ip: 0,
         }
     }
     pub fn get(&self, reg: &Register) -> u16 {
@@ -192,7 +193,10 @@ impl CPURegisters {
 }
 impl Cpu {
     pub fn new() -> Self {
-        Cpu { registers: CPURegisters::new(), flags: Flags::new() }
+        Cpu { registers: CPURegisters::new(), flags: Flags::new(), memory: [0; 1024 * 1024] }
+    }
+    pub fn set_ip(&mut self, address: usize) {
+        self.registers.ip = address as u16;
     }
     pub fn execute(&mut self, instruction: &Instruction) {
         match instruction.operation {
@@ -330,6 +334,18 @@ impl Cpu {
                         }
                     }
                     (_, _) => { println!("Not supported") }
+                }
+            }
+            Operation::Jnz => {
+                match instruction.destination {
+                    Operand::Immediate(val) => {
+                        if !self.flags.zf {
+                            self.set_ip(val as usize);
+                        }
+                    }
+                    _ => {
+                        println!("not supproted as of now");
+                    }
                 }
             }
             _ => {

@@ -5,7 +5,7 @@ use cpu::Cpu;
 use decoder::decode;
 use std::env;
 use std::fs::File;
-use std::io::{ BufReader, Read };
+use std::io::{ Error, Read };
 use std::process::exit;
 
 fn main() {
@@ -15,23 +15,17 @@ fn main() {
         exit(64);
     }
     let mut cpu = Cpu::new();
-    let my_buf = read_binary_file(String::from(&env[1]));
-
-    let instructions = decode(&my_buf);
-
-    for inst in &instructions {
-        println!("{:?}", inst);
-        cpu.execute(inst);
+    let size = read_binary_file(String::from(&env[1]), &mut cpu).unwrap();
+    while cpu.registers.ip < (size as u16) {
+        let instruction = decode(&mut cpu);
+        println!("{:?} ,IP:{}", instruction, cpu.registers.ip);
+        cpu.execute(&instruction);
     }
-    println!("{:?}", cpu)
+    println!("{:?}", cpu.registers)
 }
 
-fn read_binary_file(filepath: String) -> Vec<u8> {
-    let my_buf = BufReader::new(File::open(filepath).unwrap());
+fn read_binary_file(filepath: String, cpu: &mut Cpu) -> Result<usize, Error> {
+    let mut file = File::open(filepath).unwrap();
 
-    let mut buf: Vec<u8> = vec![];
-    for i in my_buf.bytes() {
-        buf.push(i.unwrap());
-    }
-    return buf;
+    file.read(&mut cpu.memory)
 }
