@@ -211,42 +211,7 @@ impl Cpu {
                                 self.registers.set(&reg, *val as u16);
                             }
                             (Operand::Register(src_reg), Operand::Memory(addr)) => {
-                                let dest_address = match addr {
-                                    AddressingMode::Direct(address) => { *address as u16 }
-                                    AddressingMode::Register(reg) => {
-                                        let address = self.registers.get(&reg);
-                                        address
-                                    }
-                                    AddressingMode::Memory { base, index, displacement } => {
-                                        let addr: u16 = match (base, index, displacement) {
-                                            (Some(base_reg), Some(index_reg), Some(disp)) => {
-                                                let address =
-                                                    self.registers.get(&base_reg) +
-                                                    self.registers.get(&index_reg) +
-                                                    (*disp as u16);
-                                                address
-                                            }
-                                            (None, Some(index_reg), Some(disp)) => {
-                                                let address =
-                                                    self.registers.get(&index_reg) + (*disp as u16);
-                                                address
-                                            }
-                                            (Some(base_reg), None, Some(disp)) => {
-                                                let address =
-                                                    self.registers.get(&base_reg) + (*disp as u16);
-                                                address
-                                            }
-                                            (Some(base_reg), Some(index_reg), None) => {
-                                                let address =
-                                                    self.registers.get(&base_reg) +
-                                                    self.registers.get(&index_reg);
-                                                address
-                                            }
-                                            (_, _, _) => { 0 }
-                                        };
-                                        addr
-                                    }
-                                };
+                                let dest_address = calculate_address(&addr, &self);
                                 match *src_reg {
                                     | Register::AL
                                     | Register::AH
@@ -257,52 +222,17 @@ impl Cpu {
                                     | Register::DL
                                     | Register::DH => {
                                         let val = self.registers.get(&src_reg);
-                                        self.memory[dest_address as usize] = val as u8;
+                                        self.memory[dest_address] = val as u8;
                                     }
                                     _ => {
                                         let val = self.registers.get(&src_reg);
-                                        self.memory[dest_address as usize] = val as u8;
-                                        self.memory[(dest_address + 1) as usize] = (val >> 8) as u8;
-                                    }
-                                }
-                            }
-                            (Operand::Memory(addr), Operand::Register(dest_reg)) => {
-                                let src_address = match addr {
-                                    AddressingMode::Direct(address) => { *address as u16 }
-                                    AddressingMode::Register(reg) => {
-                                        let address = self.registers.get(&reg);
-                                        address
-                                    }
-                                    AddressingMode::Memory { base, index, displacement } => {
-                                        let addr: u16 = match (base, index, displacement) {
-                                            (Some(base_reg), Some(index_reg), Some(disp)) => {
-                                                let address =
-                                                    self.registers.get(&base_reg) +
-                                                    self.registers.get(&index_reg) +
-                                                    (*disp as u16);
-                                                address
-                                            }
-                                            (None, Some(index_reg), Some(disp)) => {
-                                                let address =
-                                                    self.registers.get(&index_reg) + (*disp as u16);
-                                                address
-                                            }
-                                            (Some(base_reg), None, Some(disp)) => {
-                                                let address =
-                                                    self.registers.get(&base_reg) + (*disp as u16);
-                                                address
-                                            }
-                                            (Some(base_reg), Some(index_reg), None) => {
-                                                let address =
-                                                    self.registers.get(&base_reg) +
-                                                    self.registers.get(&index_reg);
-                                                address
-                                            }
-                                            (_, _, _) => { 0 }
-                                        };
-                                        addr
+                                        self.memory[dest_address] = val as u8;
+                                        self.memory[dest_address + 1] = (val >> 8) as u8;
                                     }
                                 };
+                            }
+                            (Operand::Memory(addr), Operand::Register(dest_reg)) => {
+                                let src_address = calculate_address(&addr, &self);
                                 match *dest_reg {
                                     | Register::AL
                                     | Register::AH
@@ -312,55 +242,19 @@ impl Cpu {
                                     | Register::CH
                                     | Register::DL
                                     | Register::DH => {
-                                        let val = self.memory[src_address as usize];
+                                        let val = self.memory[src_address];
                                         self.registers.set(&dest_reg, val as u16);
                                     }
                                     _ => {
-                                        let low_byte = self.memory[src_address as usize] as u16;
-                                        let high_byte =
-                                            (self.memory[(src_address + 1) as usize] as u16) << 8;
+                                        let low_byte = self.memory[src_address] as u16;
+                                        let high_byte = (self.memory[src_address + 1] as u16) << 8;
                                         let val = high_byte + low_byte;
                                         self.registers.set(&dest_reg, val);
                                     }
                                 }
                             }
                             (Operand::Immediate(val), Operand::Memory(addr)) => {
-                                let dest_address = match addr {
-                                    AddressingMode::Direct(address) => { *address as u16 }
-                                    AddressingMode::Register(reg) => {
-                                        let address = self.registers.get(&reg);
-                                        address
-                                    }
-                                    AddressingMode::Memory { base, index, displacement } => {
-                                        let addr: u16 = match (base, index, displacement) {
-                                            (Some(base_reg), Some(index_reg), Some(disp)) => {
-                                                let address =
-                                                    self.registers.get(&base_reg) +
-                                                    self.registers.get(&index_reg) +
-                                                    (*disp as u16);
-                                                address
-                                            }
-                                            (None, Some(index_reg), Some(disp)) => {
-                                                let address =
-                                                    self.registers.get(&index_reg) + (*disp as u16);
-                                                address
-                                            }
-                                            (Some(base_reg), None, Some(disp)) => {
-                                                let address =
-                                                    self.registers.get(&base_reg) + (*disp as u16);
-                                                address
-                                            }
-                                            (Some(base_reg), Some(index_reg), None) => {
-                                                let address =
-                                                    self.registers.get(&base_reg) +
-                                                    self.registers.get(&index_reg);
-                                                address
-                                            }
-                                            (_, _, _) => { 0 }
-                                        };
-                                        addr
-                                    }
-                                };
+                                let dest_address = calculate_address(&addr, &self);
                                 if ((*val as u16) >> 8) == 0 {
                                     self.memory[dest_address as usize] = *val as u8;
                                 } else {
@@ -513,4 +407,39 @@ impl Cpu {
             }
         }
     }
+}
+fn calculate_address(address: &AddressingMode, cpu: &Cpu) -> usize {
+    let addr = match address {
+        AddressingMode::Direct(address) => { *address as u16 }
+        AddressingMode::Register(reg) => {
+            let address = cpu.registers.get(&reg);
+            address
+        }
+        AddressingMode::Memory { base, index, displacement } => {
+            let addr: u16 = match (base, index, displacement) {
+                (Some(base_reg), Some(index_reg), Some(disp)) => {
+                    let address =
+                        cpu.registers.get(&base_reg) +
+                        cpu.registers.get(&index_reg) +
+                        (*disp as u16);
+                    address
+                }
+                (None, Some(index_reg), Some(disp)) => {
+                    let address = cpu.registers.get(&index_reg) + (*disp as u16);
+                    address
+                }
+                (Some(base_reg), None, Some(disp)) => {
+                    let address = cpu.registers.get(&base_reg) + (*disp as u16);
+                    address
+                }
+                (Some(base_reg), Some(index_reg), None) => {
+                    let address = cpu.registers.get(&base_reg) + cpu.registers.get(&index_reg);
+                    address
+                }
+                (_, _, _) => { 0 }
+            };
+            addr
+        }
+    };
+    return addr as usize;
 }
